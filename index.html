@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
 <title>XHSPHONE</title>
 
+<!-- 内置 SVG 图标（无需额外文件） -->
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="%23FF4D4F"/><stop offset="1" stop-color="%23FF9A00"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(%23g)"/><path fill="%23fff" d="M18 34h14v12h-6v-6h-8zm14-2V18h6v6h8v6z"/></svg>'>
 <link rel="apple-touch-icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="%23007aff"/></svg>'>
 
@@ -12,8 +13,11 @@
 :root{
   --bg:#fff;--fg:#111418;--muted:#6e6e73;--line:#e5e5ea;--blue:#007aff;--blue-press:#0063cc;
   --cell:#fff;--cell-alt:#f5f5f7;
-  --pad:6px;--colScale:1;--zebra:#eef5ff;
-  --w-phone:160px;--w-owner:120px;--w-real:120px;--w-wx:160px;--w-xhs:340px;--w-note:220px;--w-cat:140px;--w-actions:140px;
+  --pad:6px;               /* 行高(上下内边距) */
+  --colScale:1;            /* 列宽缩放系数 */
+  --zebra:#eef5ff;         /* 隔行颜色 */
+  --w-phone:160px;--w-owner:120px;--w-real:120px;--w-wx:160px;--w-xhs:340px;--w-note:220px;--w-cat:140px;
+  --w-actions:220px;       /* 操作列加宽，避免覆盖“分类”下拉 */
   --active:#3478F7;
 }
 *{box-sizing:border-box}
@@ -48,18 +52,29 @@ th.col-cat,   td.col-cat{   width: calc(var(--w-cat)   * var(--colScale)); }
 th.col-act,   td.col-act{   width: calc(var(--w-actions)* var(--colScale)); }
 td.col-act{ position:relative; overflow:visible; }
 
-/* 表格操作条常显且可点 */
+/* 表格操作条：默认隐藏；点“编辑”后显示；不遮挡分类 */
 .edit-bar{
-  display:flex; position:absolute; right:8px; top:50%; transform:translateY(-50%);
-  gap:6px; background:#f2f2f7; border-radius:12px; padding:6px;
-  box-shadow:0 6px 14px rgba(0,0,0,.08); z-index:20; pointer-events:auto;
+  display:none;
+  position:absolute;
+  right:8px;
+  top:50%;
+  transform:translateY(-50%);
+  gap:6px;
+  background:#f2f2f7;
+  border-radius:12px;
+  padding:6px;
+  box-shadow:0 6px 14px rgba(0,0,0,.08);
+  z-index:20;
 }
+.row-editing .edit-bar{ display:flex; }
 
-/* 分类列表：Grid 保证行内按钮对齐 */
+/* —— 分类列表对齐：用 Grid 保证每行按钮完全对齐 —— */
 .cat-row{
   display:grid;
   grid-template-columns: auto 1fr repeat(5, max-content); /* 名称 | 占位 | 五个按钮 */
-  align-items:center; column-gap:12px; row-gap:10px;
+  align-items:center;
+  column-gap:12px;
+  row-gap:10px;
 }
 .cat-row .namePill{
   display:inline-flex;align-items:center;gap:8px;
@@ -101,7 +116,7 @@ td.col-act{ position:relative; overflow:visible; }
         <option value="row_color">排序：分类</option>
       </select>
 
-      <!-- 顶部按钮：统一四字；导出JSON隐藏但保留 -->
+      <!-- 顶部按钮：统一四字；导出JSON隐藏但保留功能 -->
       <button id="btnAdd">新增一行</button>
       <button id="btnImportCSV">导入数据</button>
       <button id="btnSaveCloud" class="ghost">保存云端</button>
@@ -165,7 +180,7 @@ td.col-act{ position:relative; overflow:visible; }
   </div>
 </div>
 
-<!-- Dexie -->
+<!-- Dexie（IndexedDB 封装） -->
 <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.8/dist/dexie.min.js"></script>
 
 <script>
@@ -345,7 +360,7 @@ td.col-act{ position:relative; overflow:visible; }
     const btn = $('#btnAdd'); if(!btn) return;
     if (document.getElementById('addMenu')) return;
     const menu = document.createElement('div');
-    menu.id='addMenu';
+    Object.assign(menu,{ id:'addMenu' });
     Object.assign(menu.style,{
       position:'absolute', zIndex:'10', display:'none', background:'#fff', border:'1px solid var(--line)',
       borderRadius:'10px', boxShadow:'0 10px 24px rgba(0,0,0,.08)', padding:'8px'
@@ -384,7 +399,7 @@ td.col-act{ position:relative; overflow:visible; }
   async function timedFetch(url, opts, ms){ const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(), ms||12000); try{ const r=await fetch(url,{signal:ctl.signal,...(opts||{})}); clearTimeout(timer); return r; }catch(e){ clearTimeout(timer); throw e; } }
   async function secureFetch(url, opts){ const headers=Object.assign({}, (opts&&opts.headers)||{}, {'X-Access-Key': ACCESS_KEY}); try{ return await timedFetch(url, {...(opts||{}), headers}, 12000); }catch(e){ setCloudStatus(false,'网络异常'); throw e; } }
   window.cloudLoad = async function(){ try{ const rsp=await secureFetch(WORKER_URL,{method:'GET',cache:'no-store'}); if(!rsp.ok){ const txt=await rsp.text().catch(()=>''); setCloudStatus(false,'读取失败'); alert('云端读取失败：'+rsp.status+(txt?(' '+txt):'')); return null; } const data=await rsp.json(); setCloudStatus(true,'云端已连接'); alert('已从云端读取'); return data; }catch(e){ alert('云端读取异常'); return null; } };
-  window.cloudSave = async function(payload){ try{ const rsp=await secureFetch(WORKER_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if(!rsp.ok){ const txt=await rsp.text().catch(()=>''); setCloudStatus(false,'保存失败'); alert('云端保存失败：'+rsp.status+(txt?(' '+txt):'')); return false; } setCloudStatus(true,'已同步'); alert('云端保存成功'); return true; }catch(e){ alert('云端保存异常'); return false; } };
+  window.cloudSave = async function(payload){ try{ const rsp=await secureFetch(WORKER_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if(!rsp.ok){ const txt=await rsp.text().catch(()=> ''); setCloudStatus(false,'保存失败'); alert('云端保存失败：'+rsp.status+(txt?(' '+txt):'')); return false; } setCloudStatus(true,'已同步'); alert('云端保存成功'); return true; }catch(e){ alert('云端保存异常'); return false; } };
 
   /* ==== 验证徽章 ==== */
   (function(){
@@ -427,7 +442,6 @@ td.col-act{ position:relative; overflow:visible; }
         const name=(nameI&&nameI.value||'').trim(); const color=(colorI&&colorI.value)||'#cccccc';
         if(!name){ if(nameI) nameI.focus(); return; }
         const cats=readCats();
-        // 生成唯一 key
         const base=(name.toLowerCase().replace(/\s+/g,'_').replace(/[^\w\-]+/g,'').slice(0,24) || 'cat');
         let key=base, n=1; while(cats.some(x=>x.key===key)) key=base+'_'+(++n);
         cats.push({key,name,color}); saveCats(cats);
