@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
 <title>XHSPHONE</title>
 
-<!-- 内置 SVG 图标（无需额外文件） -->
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="%23FF4D4F"/><stop offset="1" stop-color="%23FF9A00"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(%23g)"/><path fill="%23fff" d="M18 34h14v12h-6v-6h-8zm14-2V18h6v6h8v6z"/></svg>'>
 <link rel="apple-touch-icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="%23007aff"/></svg>'>
 
@@ -13,11 +12,9 @@
 :root{
   --bg:#fff;--fg:#111418;--muted:#6e6e73;--line:#e5e5ea;--blue:#007aff;--blue-press:#0063cc;
   --cell:#fff;--cell-alt:#f5f5f7;
-  --pad:6px;               /* 行高(上下内边距) */
-  --colScale:1;            /* 列宽缩放系数 */
-  --zebra:#eef5ff;         /* 隔行颜色 */
+  --pad:6px;--colScale:1;--zebra:#eef5ff;
   --w-phone:160px;--w-owner:120px;--w-real:120px;--w-wx:160px;--w-xhs:340px;--w-note:220px;--w-cat:140px;
-  --w-actions:220px;       /* 操作列加宽，避免覆盖“分类”下拉 */
+  --w-actions:220px;      /* 扩宽避免遮挡分类下拉 */
   --active:#3478F7;
 }
 *{box-sizing:border-box}
@@ -25,7 +22,7 @@ html,body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-sy
 .wrap{max-width:1280px;margin:0 auto;padding:12px}
 h1{font-size:18px;font-weight:700;margin:0 0 8px}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
-input,select,button{height:32px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--fg);padding:0 10px}
+input,select,button{height:32px;border-radius:10px;border:1px solid var(--line);background:#fff;color:#111;padding:0 10px}
 input[type=file]{display:none}
 button{background:var(--blue);border:none;color:#fff;padding:0 12px;cursor:pointer;transition:background .15s}
 button.ghost{background:#f2f2f7;color:#000;border:1px solid var(--line)}
@@ -52,7 +49,7 @@ th.col-cat,   td.col-cat{   width: calc(var(--w-cat)   * var(--colScale)); }
 th.col-act,   td.col-act{   width: calc(var(--w-actions)* var(--colScale)); }
 td.col-act{ position:relative; overflow:visible; }
 
-/* 表格操作条：默认隐藏；点“编辑”后显示；不遮挡分类 */
+/* 操作条：默认隐藏；行处于编辑态才显示 */
 .edit-bar{
   display:none;
   position:absolute;
@@ -68,10 +65,10 @@ td.col-act{ position:relative; overflow:visible; }
 }
 .row-editing .edit-bar{ display:flex; }
 
-/* —— 分类列表对齐：用 Grid 保证每行按钮完全对齐 —— */
+/* 分类面板：Grid 对齐按钮 */
 .cat-row{
   display:grid;
-  grid-template-columns: auto 1fr repeat(5, max-content); /* 名称 | 占位 | 五个按钮 */
+  grid-template-columns: auto 1fr repeat(5, max-content);
   align-items:center;
   column-gap:12px;
   row-gap:10px;
@@ -96,9 +93,7 @@ td.col-act{ position:relative; overflow:visible; }
 <body>
 <div class="wrap">
   <div style="display:flex;justify-content:space-between;align-items:center">
-    <div>
-      <h1>XHSPHONE</h1>
-    </div>
+    <div><h1>XHSPHONE</h1></div>
     <div><span id="verifyStatus" class="badge">未验证</span> <span id="cloudStatus" class="badge"><i id="cloudDot"></i><span id="cloudText">离线</span></span></div>
   </div>
 
@@ -116,7 +111,7 @@ td.col-act{ position:relative; overflow:visible; }
         <option value="row_color">排序：分类</option>
       </select>
 
-      <!-- 顶部按钮：统一四字；导出JSON隐藏但保留功能 -->
+      <!-- 顶部按钮：统一四字；导出JSON隐藏但保留 -->
       <button id="btnAdd">新增一行</button>
       <button id="btnImportCSV">导入数据</button>
       <button id="btnSaveCloud" class="ghost">保存云端</button>
@@ -180,21 +175,21 @@ td.col-act{ position:relative; overflow:visible; }
   </div>
 </div>
 
-<!-- Dexie（IndexedDB 封装） -->
+<!-- Dexie -->
 <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.8/dist/dexie.min.js"></script>
 
 <script>
 (() => {
-  /* ==== 配置 ==== */
+  /* 配置 */
   const WORKER_URL = 'https://xhsphone.sevenoy.workers.dev';
   const ACCESS_KEY  = 'xhs_ZO6dI5#yXGgLkubH_rzMZC@wyY%h6J-kc7XN4E^O';
 
-  /* ==== 工具 ==== */
+  /* 工具 */
   const $  = (q, s=document)=>s.querySelector(q);
   const $$ = (q, s=document)=>Array.from(s.querySelectorAll(q));
   function hexToRgba(hex, a){ hex=(hex||'').replace('#',''); if(hex.length===3) hex=hex.split('').map(x=>x+x).join(''); const r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16); return `rgba(${r},${g},${b},${a})`; }
 
-  /* ==== 视图设置 ==== */
+  /* 视图 */
   const readView=()=>{ try{ return JSON.parse(localStorage.getItem('view_v6'))||{} }catch{ return {} } };
   const saveView=(v)=>localStorage.setItem('view_v6', JSON.stringify(v));
   function applyView(v){
@@ -209,7 +204,7 @@ td.col-act{ position:relative; overflow:visible; }
     $('#zebraColor').value = v.zebraColor||'#eef5ff';
   }
 
-  /* ==== 分类 ==== */
+  /* 分类 */
   const DEFAULT_CATS=[
     {key:'enterprise', name:'企业号', color:'#ffd60a'},
     {key:'olina',      name:'Olina用', color:'#007aff'},
@@ -221,11 +216,11 @@ td.col-act{ position:relative; overflow:visible; }
   const catColorOf=(key)=>{ const c=readCats().find(x=>x.key===key); return c?c.color:null; };
   const catNameOf =(key)=>{ const c=readCats().find(x=>x.key===key); return c?c.name:''; };
 
-  /* ==== DB ==== */
+  /* DB */
   const dbLocal=new Dexie('xhs_phone_sheet_v6');
   dbLocal.version(2).stores({ rows:'id, order, phone, owner, wx_real, wx_name, xhs_name, note1, row_color, updated_at' });
 
-  /* ==== 行渲染 ==== */
+  /* 行渲染 */
   function makeRowTr(r){
     const tr=document.createElement('tr'); tr.dataset.id=r.id; tr.dataset.order=r.order||0;
     const bg = r.row_color ? hexToRgba(catColorOf(r.row_color)||'#ffffff', .18) : '';
@@ -248,7 +243,7 @@ td.col-act{ position:relative; overflow:visible; }
     return tr;
   }
 
-  /* ==== 渲染/过滤/排序 ==== */
+  /* 渲染/过滤/排序 */
   async function refreshFilters(){
     const all=await dbLocal.rows.toArray();
     const owners=[...new Set(all.map(r=>r.owner).filter(Boolean))];
@@ -288,7 +283,7 @@ td.col-act{ position:relative; overflow:visible; }
     refreshFilters();
   }
 
-  /* ==== 顺序工具 & CRUD ==== */
+  /* 顺序与 CRUD */
   async function reindexOrders(){
     const list=await dbLocal.rows.orderBy('order').toArray();
     await dbLocal.transaction('rw', dbLocal.rows, async ()=>{
@@ -304,7 +299,7 @@ td.col-act{ position:relative; overflow:visible; }
     const r={ id:crypto.randomUUID(), order, phone:'', owner:'', wx_real:'', wx_name:'', xhs_name:'', note1:'', row_color:'', created_at:new Date().toISOString(), updated_at:new Date().toISOString() };
     await dbLocal.rows.put(r); await reindexOrders(); await render();
   }
-  async function addRowLocal(){ const total=await dbLocal.rows.count(); await addRowLocalAt(total); } // 兼容旧用法
+  async function addRowLocal(){ const total=await dbLocal.rows.count(); await addRowLocalAt(total); } // 兼容
   async function updateCellLocal(id,key,value){ const r=await dbLocal.rows.get(id); if(!r) return; const patch={}; patch[key]=value; patch.updated_at=new Date().toISOString(); await dbLocal.rows.update(id, patch); await render(); }
   async function deleteRowLocal(id){ await dbLocal.rows.delete(id); await render(); }
   async function moveRow(id, dir){
@@ -317,7 +312,7 @@ td.col-act{ position:relative; overflow:visible; }
     await render();
   }
 
-  /* ==== CSV ==== */
+  /* CSV */
   function parseCSV(text, delim){ const rows=[]; let cur='', inQ=false, row=[]; for(let i=0;i<text.length;i++){ const ch=text[i], next=text[i+1]; if(ch=='"'){ if(inQ && next=='"'){ cur+='"'; i++; } else inQ=!inQ; } else if(ch===delim && !inQ){ row.push(cur); cur=''; } else if((ch=='\n'||ch=='\r') && !inQ){ if(cur!==''||row.length){ row.push(cur); rows.push(row); row=[]; cur=''; } if(ch=='\r' && next=='\n'){ i++; } } else { cur+=ch; } } if(cur!==''||row.length){ row.push(cur); rows.push(row); } return rows; }
   function detectDelimiter(text){ const sample=text.slice(0,10000); const cand=[',','\t',';','|']; const cnt={',':0,'\t':0,';':0,'|':0}; let inQ=false; for(let i=0;i<sample.length;i++){ const ch=sample[i]; if(ch=='"'){ inQ=!inQ; continue; } if(!inQ && cnt.hasOwnProperty(ch)) cnt[ch]++; } let best=',',max=-1; for(const k of cand){ if(cnt[k]>max){ max=cnt[k]; best=k; } } return best; }
   function mapHeader(h){ const t=(h||'').toLowerCase().trim(); const table={ phone:['电话号码','电话','手机号','phone','mobile','号码'], owner:['所属人','owner','归属','持有人'], wx_real:['微信实名人','实名人','wx_real','微信实名'], wx_name:['对应微信名','微信名','wx_name'], xhs_name:['小红书名称','小红书名','xhs','xhs_name'], note1:['备注','备注1','note','note1'], row_color:['分类','颜色','row_color','color','类别'] }; for(const k in table){ if(table[k].some(x=>t.includes(x))) return k; } return null; }
@@ -345,7 +340,7 @@ td.col-act{ position:relative; overflow:visible; }
     alert('本地已导入 '+data.length+' 行，跳过重复 '+skipped+' 行（按电话号码去重）');
   }
 
-  /* ==== 面板开关 & 新增菜单 ==== */
+  /* 面板开关 & 新增三选项 */
   function togglePanel(btnEl, panelEl){
     const show = panelEl.style.display==='none';
     ['panelCategories','panelView','panelDebug'].forEach(id=>{
@@ -394,14 +389,14 @@ td.col-act{ position:relative; overflow:visible; }
     });
   }
 
-  /* ==== 云端 ==== */
+  /* 云端 */
   function setCloudStatus(ok, text){ const d=$('#cloudDot'), t=$('#cloudText'); if(d) d.style.background=ok?'#20c997':'#d9534f'; if(t) t.textContent=text||(ok?'云端已连接':'离线'); }
   async function timedFetch(url, opts, ms){ const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(), ms||12000); try{ const r=await fetch(url,{signal:ctl.signal,...(opts||{})}); clearTimeout(timer); return r; }catch(e){ clearTimeout(timer); throw e; } }
   async function secureFetch(url, opts){ const headers=Object.assign({}, (opts&&opts.headers)||{}, {'X-Access-Key': ACCESS_KEY}); try{ return await timedFetch(url, {...(opts||{}), headers}, 12000); }catch(e){ setCloudStatus(false,'网络异常'); throw e; } }
   window.cloudLoad = async function(){ try{ const rsp=await secureFetch(WORKER_URL,{method:'GET',cache:'no-store'}); if(!rsp.ok){ const txt=await rsp.text().catch(()=>''); setCloudStatus(false,'读取失败'); alert('云端读取失败：'+rsp.status+(txt?(' '+txt):'')); return null; } const data=await rsp.json(); setCloudStatus(true,'云端已连接'); alert('已从云端读取'); return data; }catch(e){ alert('云端读取异常'); return null; } };
   window.cloudSave = async function(payload){ try{ const rsp=await secureFetch(WORKER_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if(!rsp.ok){ const txt=await rsp.text().catch(()=> ''); setCloudStatus(false,'保存失败'); alert('云端保存失败：'+rsp.status+(txt?(' '+txt):'')); return false; } setCloudStatus(true,'已同步'); alert('云端保存成功'); return true; }catch(e){ alert('云端保存异常'); return false; } };
 
-  /* ==== 验证徽章 ==== */
+  /* 验证徽章 */
   (function(){
     function buf2hex(buffer){ const bytes = new Uint8Array(buffer); return Array.prototype.map.call(bytes, x => ('00' + x.toString(16)).slice(-2)).join(''); }
     async function sha256hex(str){ const enc = new TextEncoder(); const data = enc.encode(str); const hash = await crypto.subtle.digest('SHA-256', data); return buf2hex(hash); }
@@ -416,7 +411,7 @@ td.col-act{ position:relative; overflow:visible; }
     document.addEventListener('DOMContentLoaded', ()=>{ setup(); setTimeout(setup, 700); });
   })();
 
-  /* ==== 分类 UI 渲染/事件 ==== */
+  /* 分类 UI */
   function renderCatList(){
     const cats=readCats(), box=$('#catList'); box.innerHTML='';
     cats.forEach((c,idx)=>{
@@ -482,34 +477,52 @@ td.col-act{ position:relative; overflow:visible; }
     }
   }
 
-  /* ==== 事件绑定 ==== */
+  /* 事件绑定 */
   document.addEventListener('DOMContentLoaded', async function(){
-    // 视图
     const view = readView(); applyView(view);
+
+    /* —— 搜索 / 排序 / 筛选 —— */
+    $('#q').addEventListener('input', render);
+    $('#filterOwner').addEventListener('change', render);
+    $('#filterWxReal').addEventListener('change', render);
+    $('#sortBy').addEventListener('change', render);
+
+    /* —— 清空全部 —— */
+    $('#btnClearAll').addEventListener('click', async ()=>{
+      if(!confirm('确定清空全部数据？此操作不可撤销。')) return;
+      await dbLocal.rows.clear(); await render(); alert('已清空全部数据');
+    });
+
+    /* 视图控件 */
     $('#rowPad').oninput =(e)=>{ view.pad=parseInt(e.target.value,10); applyView(view); saveView(view); };
     $('#colScale').oninput=(e)=>{ view.colScale=parseFloat(e.target.value); applyView(view); saveView(view); };
     $('#zebraOn').onchange=(e)=>{ view.zebraOn=e.target.checked; applyView(view); saveView(view); };
     $('#zebraColor').oninput=(e)=>{ view.zebraColor=e.target.value; applyView(view); saveView(view); };
 
-    // CSV
+    /* CSV */
     $('#btnImportCSV').onclick=()=> $('#csvFile').click();
     $('#csvFile').onchange=async (e)=>{ const f=e.target.files && e.target.files[0]; if(!f) return; const text=await f.text(); await importCSVText(text); e.target.value=''; };
 
-    // 新增三选项
+    /* 新增三选项 */
     setupAddMenu();
 
-    // 顶部面板按钮
+    /* 顶部面板按钮高亮 */
     $('#btnCategories').onclick=()=> togglePanel($('#btnCategories'), $('#panelCategories'));
     $('#btnView').onclick=()=> togglePanel($('#btnView'), $('#panelView'));
     $('#btnDebug').onclick=()=> togglePanel($('#btnDebug'), $('#panelDebug'));
 
-    // 表格委托
+    /* 表格委托（含互斥编辑 3 行） */
     $('#gridBody').addEventListener('blur', async (e)=>{ const td=e.target.closest('[contenteditable="true"]'); if(!td) return; const tr=e.target.closest('tr'); const id=tr.dataset.id; const key=td.dataset.k; const val=td.innerText.trim(); await updateCellLocal(id, key, val); }, true);
     $('#gridBody').addEventListener('change', async (e)=>{ const sel=e.target.closest('select[data-k]'); if(!sel) return; const tr=sel.closest('tr'); await updateCellLocal(tr.dataset.id, sel.dataset.k, sel.value); });
     $('#gridBody').addEventListener('click', async (e)=>{
       const btn=e.target.closest('button[data-act]'); if(!btn) return;
       const tr=btn.closest('tr'); const id=tr.dataset.id; const act=btn.dataset.act;
-      if(act==='toggleEdit'){ tr.classList.toggle('row-editing'); return; }
+      if(act==='toggleEdit'){
+        const was=tr.classList.contains('row-editing');
+        $$('#gridBody tr.row-editing').forEach(el=>{ if(el!==tr) el.classList.remove('row-editing'); }); // 互斥①
+        tr.classList.toggle('row-editing', !was); // 互斥②
+        return; // 互斥③
+      }
       if(act==='del'){ if(confirm('确认删除该行？')) await deleteRowLocal(id); return; }
       if(act==='up'){ await moveRow(id,'up'); return; }
       if(act==='down'){ await moveRow(id,'down'); return; }
@@ -517,16 +530,16 @@ td.col-act{ position:relative; overflow:visible; }
 
     await dbLocal.open(); await render();
 
-    // 分类区
+    /* 分类区 */
     renderCatList(); bindCategoryEvents();
 
-    // 云端按钮
+    /* 云端按钮 */
     const s=$('#btnSaveCloud'), l=$('#btnLoadCloud'), exp=$('#btnExportCSV');
     if(s && !s.__w){ s.__w=true; s.addEventListener('click', async()=>{ try{ const rows=await dbLocal.rows.toArray(); const cats=JSON.parse(localStorage.getItem('cats_v6')||'[]'); const view=JSON.parse(localStorage.getItem('view_v6')||'{}'); const payload={rows,cats,view,ver:1,updated_at:new Date().toISOString()}; await cloudSave(payload); }catch{ alert('准备保存数据失败'); } }); }
     if(l && !l.__w){ l.__w=true; l.addEventListener('click', async()=>{ const data=await cloudLoad(); if(data){ try{ await dbLocal.rows.clear(); if(Array.isArray(data.rows)&&data.rows.length) await dbLocal.rows.bulkPut(data.rows); if(Array.isArray(data.cats)) localStorage.setItem('cats_v6', JSON.stringify(data.cats)); if(data.view&&typeof data.view==='object') localStorage.setItem('view_v6', JSON.stringify(data.view)); await render(); alert('已应用云端数据'); }catch{ alert('写入本地失败'); } } }); }
     if(exp && !exp.__w){ exp.__w=true; exp.addEventListener('click', async()=>{ try{ const rows = await dbLocal.rows.toArray(); const cols=['phone','owner','wx_real','wx_name','xhs_name','note1','row_color']; const esc=v=>{const s=(v==null?'':String(v)).replace(/"/g,'""'); return /[",\n]/.test(s)?'"'+s+'"':s;}; const lines=[cols.join(',')]; rows.forEach(r=>lines.push(cols.map(k=>esc(r[k]||'')).join(','))); const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='xhs-phones-'+Date.now()+'.csv'; a.click(); alert('已导出 CSV'); }catch{ alert('导出失败'); } }); }
-    // 首屏连通性探测
-    secureFetch(WORKER_URL,{method:'GET',cache:'no-store'}).then(r=>setCloudStatus(r.ok, r.ok?'云端已连接':'连接失败')).catch(()=>setCloudStatus(false,'离线'));
+    /* 连通性 */
+    (async ()=>{ try{ const r=await fetch(WORKER_URL,{method:'GET',headers:{'X-Access-Key':ACCESS_KEY},cache:'no-store'}); setCloudStatus(r.ok, r.ok?'云端已连接':'连接失败'); }catch{ setCloudStatus(false,'离线'); } })();
   });
 })();
 </script>
