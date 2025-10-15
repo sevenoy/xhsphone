@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
+<title>XHSPHONE</title>
+
+<!-- 内置 SVG 图标（无需额外文件） -->
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="%23FF4D4F"/><stop offset="1" stop-color="%23FF9A00"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(%23g)"/><path fill="%23fff" d="M18 34h14v12h-6v-6h-8zm14-2V18h6v6h8v6z"/></svg>'>
+<link rel="apple-touch-icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="%23007aff"/></svg>'>
+
+<style>
+:root{
+  --bg:#fff;--fg:#111418;--muted:#6e6e73;--line:#e5e5ea;--blue:#007aff;--blue-press:#0063cc;
+  --cell:#fff;--cell-alt:#f5f5f7;
+  --pad:6px;               /* 行高(上下内边距) */
+  --colScale:1;            /* 列宽缩放系数 */
+  --zebra:#eef5ff;         /* 隔行颜色 */
+  --w-phone:160px;--w-owner:120px;--w-real:120px;--w-wx:160px;--w-xhs:340px;--w-note:220px;--w-cat:140px;--w-actions:140px;
+  --active:#3478F7;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue",Helvetica,Arial,"PingFang SC","Noto Sans CJK SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+.wrap{max-width:1280px;margin:0 auto;padding:12px}
+h1{font-size:18px;font-weight:700;margin:0 0 8px}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+input,select,button{height:32px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--fg);padding:0 10px}
+input[type=file]{display:none}
+button{background:var(--blue);border:none;color:#fff;padding:0 12px;cursor:pointer;transition:background .15s}
+button.ghost{background:#f2f2f7;color:#000;border:1px solid var(--line)}
+button:active{background:var(--blue-press)}
+button.ghost.active{background:var(--active);color:#fff;border-color:var(--active)}
+.badge{font-variant-numeric:tabular-nums;border:1px solid var(--line);border-radius:999px;padding:4px 8px;color:var(--muted)}
+.panel{background:var(--cell);border:1px solid var(--line);border-radius:14px;padding:10px;margin:10px 0}
+table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}
+th,td{padding:var(--pad) 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+thead th{position:sticky;top:0;background:#f9f9fb;font-weight:600;z-index:2}
+tbody.zebra tr:nth-child(even) td{ background: var(--zebra); }
+td[contenteditable='true']{background:transparent; outline:none}
+td[contenteditable='true']:focus{background:var(--cell-alt); outline:1px solid var(--line)}
+.status{font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-wrap}
+.rgbaChip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;height:32px}
+.colorDot{width:14px;height:14px;border-radius:4px;border:1px solid #c9c9ce;display:inline-block}
+th.col-phone, td.col-phone{ width: calc(var(--w-phone) * var(--colScale)); }
+th.col-owner, td.col-owner{ width: calc(var(--w-owner) * var(--colScale)); }
+th.col-real,  td.col-real{  width: calc(var(--w-real)  * var(--colScale)); }
+th.col-wx,    td.col-wx{    width: calc(var(--w-wx)    * var(--colScale)); }
+th.col-xhs,   td.col-xhs{   width: calc(var(--w-xhs)   * var(--colScale)); }
+th.col-note,  td.col-note{  width: calc(var(--w-note)  * var(--colScale)); }
+th.col-cat,   td.col-cat{   width: calc(var(--w-cat)   * var(--colScale)); }
+th.col-act,   td.col-act{   width: calc(var(--w-actions)* var(--colScale)); }
+td.col-act{ position:relative; overflow:visible; }
+
+/* 表格操作条：始终可点 */
+.edit-bar{
+  display:flex;
+  position:absolute;
+  right:8px;
+  top:50%;
+  transform:translateY(-50%);
+  gap:6px;
+  background:#f2f2f7;
+  border-radius:12px;
+  padding:6px;
+  box-shadow:0 6px 14px rgba(0,0,0,.08);
+  z-index:20;
+  pointer-events:auto;
+}
+
+/* —— 分类列表对齐：用 Grid 保证每行按钮完全对齐 —— */
+.cat-row{
+  display:grid;
+  grid-template-columns: auto 1fr repeat(5, max-content); /* 名称 | 自适应占位 | 五个按钮 */
+  align-items:center;
+  column-gap:12px;
+  row-gap:10px;
+}
+.cat-row .namePill{
+  display:inline-flex;align-items:center;gap:8px;
+  border:1px solid var(--line);border-radius:12px;padding:6px 10px;background:#fff
+}
+.cat-row .spacer{height:1px}
+#verifyStatus.badge, #cloudStatus{
+  display:inline-flex; align-items:center; height:28px; line-height:28px;
+  padding:0 12px; border-radius:999px; white-space:nowrap; vertical-align:middle;
+}
+#cloudStatus #cloudDot{ width:8px; height:8px; border-radius:50%; margin-right:6px; background:#aaa; }
+@media (max-width:420px){
+  #verifyStatus.badge, #cloudStatus{ height:26px; line-height:26px; padding:0 10px; font-size:12px; }
+}
+.table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <h1>XHSPHONE</h1>
+      <!-- 原说明文字已删除 -->
+    </div>
+    <div><span id="verifyStatus" class="badge">未验证</span> <span id="cloudStatus" class="badge"><i id="cloudDot"></i><span id="cloudText">离线</span></span></div>
+  </div>
+
+  <div class="panel">
+    <div class="toolbar">
+      <input id="q" placeholder="搜索：任意关键词" style="flex:1 1 280px" />
+      <select id="filterOwner"><option value="all">所属人：全部</option></select>
+      <select id="filterWxReal"><option value="all">微信实名人：全部</option></select>
+      <select id="sortBy">
+        <option value="order">排序：手动</option>
+        <option value="owner">排序：所属人</option>
+        <option value="wx_real">排序：微信实名人</option>
+        <option value="phone">排序：电话号码</option>
+        <option value="xhs_name">排序：小红书名称</option>
+        <option value="row_color">排序：分类</option>
+      </select>
+
+      <!-- 顶部按钮：统一四字命名；导出JSON隐藏但保留功能 -->
+      <button id="btnAdd">新增一行</button>
+      <button id="btnImportCSV">导入数据</button>
+      <button id="btnSaveCloud" class="ghost">保存云端</button>
+      <button id="btnLoadCloud" class="ghost">云端加载</button>
+      <button id="btnExportCSV" class="ghost">导出数据</button>
+      <input id="csvFile" type="file" accept=".csv,text/csv" />
+      <button id="btnExport" class="ghost" style="display:none">导出JSON</button>
+      <button id="btnClearAll" class="ghost">清空全部</button>
+      <button id="btnCategories" class="ghost">分类设置</button>
+      <button id="btnView" class="ghost">显示尺寸</button>
+      <button id="btnDebug" class="ghost">显示日志</button>
+    </div>
+    <div class="status" id="statusText">本地模式：不联网 · 支持 CSV 导入 / JSON 导出</div>
+  </div>
+
+  <div class="panel" style="overflow:auto;max-height:92vh">
+    <div class="table-wrap"><table id="grid">
+      <thead>
+        <tr>
+          <th class="col-phone">电话号码</th>
+          <th class="col-owner">所属人</th>
+          <th class="col-real">微信实名人</th>
+          <th class="col-wx">对应微信名</th>
+          <th class="col-xhs">小红书名称</th>
+          <th class="col-note">备注</th>
+          <th class="col-cat">分类</th>
+          <th class="col-act">操作</th>
+        </tr>
+      </thead>
+      <tbody id="gridBody" class="zebra"></tbody>
+    </table></div>
+  </div>
+
+  <!-- 分类设置 -->
+  <div class="panel" id="panelCategories" style="display:none">
+    <div class="toolbar" style="align-items:flex-start">
+      <div class="rgbaChip">
+        <span class="colorDot" id="catColorPreview"></span>
+        <input id="catName" placeholder="分类名称，例如：Olina用" style="width:180px">
+        <input id="catColor" type="color" value="#007aff" style="width:60px;padding:0 2px">
+      </div>
+      <button id="btnCatAdd">新增分类</button>
+      <div class="status">设置后将改变<b>小红书名称</b>这一格的<strong>背景色</strong>（透明度 0.18）。</div>
+    </div>
+    <div id="catList"></div>
+  </div>
+
+  <!-- 显示与尺寸 -->
+  <div class="panel" id="panelView" style="display:none">
+    <div class="toolbar">
+      <label>行高</label>
+      <input id="rowPad" type="range" min="4" max="14" step="1" value="6" style="width:160px">
+      <label>列宽缩放</label>
+      <input id="colScale" type="range" min="0.7" max="1.4" step="0.05" value="1" style="width:160px">
+      <label>隔行着色</label>
+      <input id="zebraOn" type="checkbox" checked>
+      <input id="zebraColor" type="color" value="#eef5ff">
+      <button id="btnCompact" class="ghost">一键紧凑</button>
+      <button id="btnResetSize" class="ghost">恢复默认</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dexie（IndexedDB 封装） -->
+<script src="https://cdn.jsdelivr.net/npm/dexie@4.0.8/dist/dexie.min.js"></script>
+
+<script>
+/* ========== 你的 Worker 接入参数 ========== */
+const WORKER_URL = 'https://xhsphone.sevenoy.workers.dev';
+const ACCESS_KEY  = 'xhs_ZO6dI5#yXGgLkubH_rzMZC@wyY%h6J-kc7XN4E^O';
+/* ========================================= */
+
+/* 工具别名 */
+const $  = (q, s=document)=>s.querySelector(q);
+const $$ = (q, s=document)=>Array.from(s.querySelectorAll(q));
+
+/* 视图设置（行高/列宽/斑马纹） */
+const readView=()=>{ try{ return JSON.parse(localStorage.getItem('view_v6'))||{} }catch{ return {} } };
+const saveView=(v)=>localStorage.setItem('view_v6', JSON.stringify(v));
+function applyView(v){
+  document.documentElement.style.setProperty('--pad', (v.pad??6)+'px');
+  document.documentElement.style.setProperty('--colScale', v.colScale??1);
+  document.documentElement.style.setProperty('--zebra', v.zebraColor||'#eef5ff');
+  const body=$('#gridBody');
+  (v.zebraOn===false?body.classList.remove('zebra'):body.classList.add('zebra'));
+  $('#rowPad').value = v.pad??6;
+  $('#colScale').value = v.colScale??1;
+  $('#zebraOn').checked = !(v.zebraOn===false);
+  $('#zebraColor').value = v.zebraColor||'#eef5ff';
+}
+
+/* 分类 */
+const DEFAULT_CATS=[
+  {key:'enterprise', name:'企业号', color:'#ffd60a'},
+  {key:'olina',      name:'Olina用', color:'#007aff'},
+  {key:'jasper',     name:'嘉用',   color:'#af52de'},
+  {key:'usable',     name:'可用',   color:'#34c759'}
+];
+const readCats=()=>{ try{ return JSON.parse(localStorage.getItem('cats_v6'))||DEFAULT_CATS; }catch{ return DEFAULT_CATS; } };
+const saveCats=(c)=>localStorage.setItem('cats_v6', JSON.stringify(c));
+const catColorOf=(key)=>{ const c=readCats().find(x=>x.key===key); return c?c.color:null; };
+const catNameOf =(key)=>{ const c=readCats().find(x=>x.key===key); return c?c.name:''; };
+function hexToRgba(hex, a){ hex=(hex||'').replace('#',''); if(hex.length===3) hex=hex.split('').map(x=>x+x).join(''); const r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16); return `rgba(${r},${g},${b},${a})`; }
+function renderCatList(){
+  const cats=readCats(), box=$('#catList'); box.innerHTML='';
+  cats.forEach((c,idx)=>{
+    const row=document.createElement('div'); row.className='cat-row';
+    row.innerHTML=`
+      <span class="namePill"><span class="colorDot" style="background:${c.color}"></span>${c.name}</span>
+      <span class="spacer"></span>
+      <button class="ghost" data-act="up"        data-i="${idx}">上移</button>
+      <button class="ghost" data-act="down"      data-i="${idx}">下移</button>
+      <button class="ghost" data-act="editName"  data-i="${idx}">改名</button>
+      <button class="ghost" data-act="editColor" data-i="${idx}">改颜色</button>
+      <button class="ghost" data-act="del"       data-i="${idx}">删除</button>`;
+    box.appendChild(row);
+  });
+}
+function ensureCatOptions(){
+  const cats=readCats();
+  const opts=['<option value="">无</option>'].concat(cats.map(c=>`<option value="${c.key}">${c.name}</option>`)).join('');
+  $$('#gridBody select[data-k="row_color"]').forEach(sel=>{ const cur=sel.value; sel.innerHTML=opts; sel.value=cur; });
+}
+
+/* 本地 DB（Dexie） */
+const dbLocal=new Dexie('xhs_phone_sheet_v6');
+dbLocal.version(2).stores({ rows:'id, order, phone, owner, wx_real, wx_name, xhs_name, note1, row_color, updated_at' });
+
+/* 行渲染 */
+function makeRowTr(r){
+  const tr=document.createElement('tr'); tr.dataset.id=r.id; tr.dataset.order=r.order||0;
+  const bg = r.row_color ? hexToRgba(catColorOf(r.row_color)||'#ffffff', .18) : '';
+  tr.innerHTML=`
+    <td class="col-phone" contenteditable="true" data-k="phone">${r.phone||''}</td>
+    <td class="col-owner" contenteditable="true" data-k="owner">${r.owner||''}</td>
+    <td class="col-real"  contenteditable="true" data-k="wx_real">${r.wx_real||''}</td>
+    <td class="col-wx"    contenteditable="true" data-k="wx_name">${r.wx_name||''}</td>
+    <td class="col-xhs"   contenteditable="true" data-k="xhs_name" style="${bg?`background:${bg};`:''}">${r.xhs_name||''}</td>
+    <td class="col-note"  contenteditable="true" data-k="note1">${r.note1||''}</td>
+    <td class="col-cat"><select data-k="row_color"></select></td>
+    <td class="col-act">
+      <button data-act="toggleEdit" class="ghost">编辑</button>
+      <div class="edit-bar">
+        <button data-act="up" class="ghost">上移</button>
+        <button data-act="down" class="ghost">下移</button>
+        <button data-act="del" class="ghost">删除</button>
+      </div>
+    </td>`;
+  return tr;
+}
+
+/* 渲染 + 过滤 + 排序 */
+async function refreshFilters(){
+  const all=await dbLocal.rows.toArray();
+  const owners=[...new Set(all.map(r=>r.owner).filter(Boolean))];
+  const reals=[...new Set(all.map(r=>r.wx_real).filter(Boolean))];
+  const oSel=$('#filterOwner'); const saveO=oSel.value; oSel.innerHTML='<option value="all">所属人：全部</option>'+owners.map(v=>`<option value="${v}">${v}</option>`).join(''); oSel.value=owners.includes(saveO)?saveO:'all';
+  const wSel=$('#filterWxReal'); const saveW=wSel.value; wSel.innerHTML='<option value="all">微信实名人：全部</option>'+reals.map(v=>`<option value="${v}">${v}</option>`).join(''); wSel.value=reals.includes(saveW)?saveW:'all';
+}
+async function render(){
+  const kw=($('#q').value||'').trim().toLowerCase();
+  const fOwner=$('#filterOwner').value; const fWx=$('#filterWxReal').value;
+  const sortBy=$('#sortBy').value;
+  let all=await dbLocal.rows.toArray();
+
+  all=all.filter(r=>{
+    if(fOwner!=='all' && (r.owner||'')!==fOwner) return false;
+    if(fWx!=='all' && (r.wx_real||'')!==fWx) return false;
+    if(!kw) return true;
+    const t=[r.phone,r.owner,r.wx_real,r.wx_name,r.xhs_name,r.note1,catNameOf(r.row_color)].join(' ').toLowerCase();
+    return t.includes(kw);
+  });
+
+  const collator=new Intl.Collator('zh-Hans-CN',{numeric:true,sensitivity:'base'});
+  if(sortBy==='order') all.sort((a,b)=> (a.order||0)-(b.order||0));
+  else all.sort((a,b)=> collator.compare(String(a[sortBy]||''), String(b[sortBy]||'')));
+
+  const body=$('#gridBody'); body.innerHTML='';
+  all.forEach(r=> body.appendChild(makeRowTr(r)));
+  ensureCatOptions();
+  $$('#gridBody tr').forEach(tr=>{ const id=tr.dataset.id; dbLocal.rows.get(id).then(r=>{ const sel=tr.querySelector('select[data-k="row_color"]'); if(sel) sel.value=r && r.row_color ? r.row_color : ''; }); });
+  refreshFilters();
+}
+
+/* —— 重新编号工具（保证 order 连续） —— */
+async function reindexOrders(){
+  const list=await dbLocal.rows.orderBy('order').toArray();
+  await dbLocal.transaction('rw', dbLocal.rows, async ()=>{
+    for(let i=0;i<list.length;i++){
+      await dbLocal.rows.update(list[i].id,{order:i+1,updated_at:new Date().toISOString()});
+    }
+  });
+}
+
+/* CRUD 与插入位置控制 */
+async function addRowLocalAt(index){
+  const total=await dbLocal.rows.count();
+  const list=await dbLocal.rows.orderBy('order').toArray();
+  const order = (index<=0)? 0.5 : (index>=total? (total+0.5) : ( (list[index-1]?.order||0) + 0.5 ));
+  const r={ id:crypto.randomUUID(), order, phone:'', owner:'', wx_real:'', wx_name:'', xhs_name:'', note1:'', row_color:'', created_at:new Date().toISOString(), updated_at:new Date().toISOString() };
+  await dbLocal.rows.put(r);
+  await reindexOrders();
+  await render();
+}
+/* 兼容旧逻辑：默认末行新增 */
+async function addRowLocal(){ const total=await dbLocal.rows.count(); await addRowLocalAt(total); }
+async function updateCellLocal(id,key,value){ const r=await dbLocal.rows.get(id); if(!r) return; const patch={}; patch[key]=value; patch.updated_at=new Date().toISOString(); await dbLocal.rows.update(id, patch); await render(); }
+async function deleteRowLocal(id){ await dbLocal.rows.delete(id); await render(); }
+async function moveRow(id, dir){ const all=await dbLocal.rows.orderBy('order').toArray(); const idx=all.findIndex(x=>x.id===id); if(idx<0) return; const tgt=dir==='up'? idx-1:idx+1; if(tgt<0||tgt>=all.length) return; const a=all[idx], b=all[tgt]; await dbLocal.rows.update(a.id,{order:b.order,updated_at:new Date().toISOString()}); await dbLocal.rows.update(b.id,{order:a.order,updated_at:new Date().toISOString()}); await render(); }
+
+/* CSV 导入（自动识别分隔符，按“电话号码”去重；过滤 nan/null/-） */
+function parseCSV(text, delim){ const rows=[]; let cur='', inQ=false, row=[]; for(let i=0;i<text.length;i++){ const ch=text[i], next=text[i+1]; if(ch=='"'){ if(inQ && next=='"'){ cur+='"'; i++; } else inQ=!inQ; } else if(ch===delim && !inQ){ row.push(cur); cur=''; } else if((ch=='\n'||ch=='\r') && !inQ){ if(cur!==''||row.length){ row.push(cur); rows.push(row); row=[]; cur=''; } if(ch=='\r' && next=='\n'){ i++; } } else { cur+=ch; } } if(cur!==''||row.length){ row.push(cur
