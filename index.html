@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>小红书手机号整理 · 协作表格（苹果风 v6 · KV云端）</title>
+<style>
+  :root{
+    --bg:#f7f8fa;--card:#fff;--text:#222;--muted:#7a7a7a;--brand:#4f7cff;--ok:#2ec07c;--bad:#d9534f;--line:#eaeaea;
+    --radius:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+  .container{max-width:1080px;margin:0 auto;padding:16px 14px 80px}
+  header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+  h1{font-size:20px;margin:0 6px 0 0;font-weight:700}
+  .badge{display:inline-flex;align-items:center;gap:.5em;background:#fff;border:1px solid var(--line);color:#666;border-radius:999px;padding:6px 12px}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;background:var(--bad)}
+  .ok{background:var(--ok)}
+  .toolbar{position:sticky;top:0;z-index:10;background:#fff;padding:10px;border-bottom:1px solid var(--line)}
+  .bar{display:flex;gap:10px;flex-wrap:wrap}
+  button{padding:10px 14px;border:0;border-radius:12px;background:#eef3ff;color:#2643a2;font-weight:600}
+  button.primary{background:var(--brand);color:#fff}
+  button.ghost{background:#f1f3f5;color:#333}
+  button.warn{background:#ffe8e6;color:#933}
+  input,select{height:38px;border:1px solid var(--line);border-radius:12px;padding:0 12px;background:#fff}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px}
+  .table-wrap{overflow:auto;border-radius:12px;border:1px solid var(--line);background:#fff}
+  table{min-width:900px;border-collapse:collapse;width:100%}
+  th,td{border-bottom:1px solid var(--line);padding:10px 8px;text-align:left;white-space:nowrap}
+  tr:nth-child(even){background:#fcfdff}
+  tr:hover{background:#f7fbff}
+  .muted{color:var(--muted)}
+  .footer-note{margin-top:8px;color:#999}
+  /* 密码遮罩 */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.38);display:none;align-items:center;justify-content:center;padding:20px}
+  .modal .panel{width:100%;max-width:420px;background:#fff;border-radius:18px;padding:18px;border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.15)}
+  .modal h3{margin:0 0 8px}
+  .modal .row{display:flex;gap:8px}
+  .modal input{flex:1}
+  .hidden{display:none}
+  /* 让移动端更好操作 */
+  @media (max-width:640px){
+    button{padding:10px 12px}
+    .toolbar{border-radius:0}
+    th,td{padding:10px 6px}
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>小红书手机号整理 · 协作表格（苹果风 v6）</h1>
+    <span id="white-badge" class="badge">未验证</span>
+    <span class="badge"><span id="cloud-dot" class="dot"></span><span id="cloud-text">离线</span></span>
+  </header>
+
+  <div class="toolbar">
+    <div class="bar">
+      <button id="btn-add" class="primary">＋ 新增一行</button>
+      <label class="badge" style="cursor:pointer">
+        <input type="file" id="csv-file" accept=".csv" class="hidden"/>
+        导入 CSV
+      </label>
+      <button id="btn-save-cloud" class="ghost">保存到云端</button>
+      <button id="btn-load-cloud" class="ghost">从云端加载</button>
+      <button id="btn-export" class="ghost">导出 CSV</button>
+      <button id="btn-clear" class="warn">清空全部</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th>微信实名人</th>
+            <th>对应微信名</th>
+            <th>小红书名称</th>
+            <th>备注</th>
+            <th>分类</th>
+            <th class="muted">操作</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="footer-note">本地模式：数据同时会写入浏览器（localStorage），并可手动同步至云端（Cloudflare KV）。</div>
+  </div>
+</div>
+
+<!-- 密码门 -->
+<div id="gate" class="modal">
+  <div class="panel">
+    <h3>访问验证</h3>
+    <p class="muted">请输入访问密码，通过后设备将加入本地白名单。</p>
+    <div class="row" style="margin-top:8px">
+      <input id="gate-input" type="password" placeholder="输入密码" />
+      <button id="gate-ok" class="primary">进入</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/** ============ 你需要根据自己环境改的两项 ============ */
+const WORKER_URL = 'https://xhsphone.sevenoy.workers.dev'; // 你的 Cloudflare Worker
+const ACCESS_KEY  = 'xhs_ZO6dI5#yXGgLkubH_rzMZC@wyY%h6J-kc7XN4E^O';  // 你的 Access Key
+
+/** ============ 密码白名单（本地） ============ */
+const PASS = 'jiajia11jiajia22jiajia33';
+const LS_WHITELIST = 'xhs_whitelist';
+function ensureGate(){
+  const ok = localStorage.getItem(LS_WHITELIST) === '1';
+  const badge = document.getElementById('white-badge');
+  if(ok){
+    badge.textContent = '已验证白名单';
+    badge.style.color = '#333';
+  }else{
+    badge.textContent = '未验证';
+    badge.style.color = '#c00';
+    document.getElementById('gate').style.display = 'flex';
+  }
+}
+document.getElementById('gate-ok').onclick = ()=>{
+  const v = document.getElementById('gate-input').value.trim();
+  if(v === PASS){
+    localStorage.setItem(LS_WHITELIST,'1');
+    document.getElementById('gate').style.display='none';
+    document.getElementById('white-badge').textContent = '已验证白名单';
+  }else{
+    alert('密码错误');
+  }
+};
+
+/** ============ 简易数据层 ============ */
+const LS_KEY = 'xhs_rows_v1';
+function getRows(){
+  try{ return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); }catch{return []}
+}
+function setRows(rows){
+  localStorage.setItem(LS_KEY, JSON.stringify(rows||[]));
+  render();
+}
+
+/** ============ 渲染表格 ============ */
+function render(){
+  const rows = getRows();
+  const tb = document.getElementById('tbody');
+  tb.innerHTML = '';
+  rows.forEach((r,idx)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td contenteditable="true" data-k="wx_real">${escapeHtml(r.wx_real||'')}</td>
+      <td contenteditable="true" data-k="wx_name">${escapeHtml(r.wx_name||'')}</td>
+      <td contenteditable="true" data-k="xhs_name">${escapeHtml(r.xhs_name||'')}</td>
+      <td contenteditable="true" data-k="note">${escapeHtml(r.note||'')}</td>
+      <td contenteditable="true" data-k="cat">${escapeHtml(r.cat||'')}</td>
+      <td><button data-act="del" data-i="${idx}">删除</button></td>`;
+    tb.appendChild(tr);
+  });
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]))}
+
+document.getElementById('tbody').addEventListener('input', (e)=>{
+  const td = e.target.closest('td[contenteditable]'); if(!td) return;
+  const k = td.dataset.k;
+  const tr = td.parentElement;
+  const idx = Array.from(tr.parentElement.children).indexOf(tr);
+  const rows = getRows();
+  rows[idx] = rows[idx] || {};
+  rows[idx][k] = td.textContent.trim();
+  setRows(rows);
+});
+document.getElementById('tbody').addEventListener('click', (e)=>{
+  if(e.target.dataset.act==='del'){
+    const i = +e.target.dataset.i;
+    const rows = getRows();
+    rows.splice(i,1);
+    setRows(rows);
+  }
+});
+
+document.getElementById('btn-add').onclick = ()=>{
+  const rows = getRows();
+  rows.unshift({wx_real:'',wx_name:'',xhs_name:'',note:'',cat:''});
+  setRows(rows);
+};
+
+/** ============ CSV 导入/导出（极简版） ============ */
+function toCSV(rows){
+  const head = ['微信实名人','对应微信名','小红书名称','备注','分类'];
+  const lines = [head.join(',')];
+  rows.forEach(r=>{
+    const arr = [r.wx_real||'',r.wx_name||'',r.xhs_name||'',r.note||'',r.cat||''].map(v=>`"${String(v).replace(/"/g,'""')}"`);
+    lines.push(arr.join(','));
+  });
+  return lines.join('\r\n');
+}
+function fromCSV(text){
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  if(!lines.length) return [];
+  const out = [];
+  for(let i=1;i<lines.length;i++){
+    const row = parseCSVLine(lines[i]);
+    out.push({wx_real:row[0]||'',wx_name:row[1]||'',xhs_name:row[2]||'',note:row[3]||'',cat:row[4]||''});
+  }
+  return out;
+}
+function parseCSVLine(line){
+  const res=[]; let cur='',inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c=='"'){ if(inQ && line[i+1]=='"'){cur+='"'; i++;} else inQ=!inQ; }
+    else if(c==',' && !inQ){ res.push(cur); cur=''; }
+    else cur+=c;
+  }
+  res.push(cur); return res;
+}
+document.getElementById('csv-file').addEventListener('change', async (e)=>{
+  const file = e.target.files[0]; if(!file) return;
+  const text = await file.text();
+  const rows = fromCSV(text);
+  setRows(rows);
+  alert('CSV 已导入');
+});
+document.getElementById('btn-export').onclick = ()=>{
+  const csv = toCSV(getRows());
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'rows.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+/** ============ 云端：保存 / 读取 + 状态灯 ============ */
+function setCloudStatus(ok){
+  const dot=document.getElementById('cloud-dot'); const txt=document.getElementById('cloud-text');
+  dot.className = 'dot' + (ok ? ' ok' : '');
+  txt.textContent = ok ? '云端已连接' : '离线';
+}
+async function saveToCloud(){
+  try{
+    const payload = {rows:getRows(), cats:[], view:{}, ver:1, updated_at:new Date().toISOString()};
+    const res = await fetch(WORKER_URL, {
+      method:'PUT',
+      headers:{'Content-Type':'application/json','X-Access-Key':ACCESS_KEY},
+      body:JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error(res.status);
+    alert('已保存到云端'); setCloudStatus(true);
+  }catch(e){ console.error(e); alert('云端保存失败（网络或权限）'); setCloudStatus(false); }
+}
+async function loadFromCloud(){
+  try{
+    const res = await fetch(WORKER_URL, { headers:{'X-Access-Key':ACCESS_KEY} });
+    if(!res.ok) throw new Error(res.status);
+    const json = await res.json();
+    if(Array.isArray(json.rows)) setRows(json.rows); else alert('云端数据为空');
+    alert('已从云端读取'); setCloudStatus(true);
+  }catch(e){ console.error(e); alert('云端读取失败（网络或权限）'); setCloudStatus(false); }
+}
+document.getElementById('btn-save-cloud').onclick = saveToCloud;
+document.getElementById('btn-load-cloud').onclick = loadFromCloud;
+document.getElementById('btn-clear').onclick = ()=>{ if(confirm('确定清空本地表格？')) setRows([]); };
+
+/** ============ 初始化 ============ */
+function probeCloud(){
+  fetch(WORKER_URL, {headers:{'X-Access-Key':ACCESS_KEY}})
+    .then(r=>setCloudStatus(r.ok)).catch(()=>setCloudStatus(false));
+}
+ensureGate();
+if(!localStorage.getItem(LS_KEY)) setRows([]); else render();
+probeCloud();
+</script>
+</body>
+</html>
