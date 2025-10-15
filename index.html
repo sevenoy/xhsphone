@@ -48,6 +48,8 @@ button{background:var(--blue);border:none;color:#fff;padding:0 12px;cursor:point
 button.ghost{background:#f2f2f7;color:#000;border:1px solid var(--line)}
 button:active{background:var(--blue-press)}
 button.ghost.active{background:var(--active);color:#fff;border-color:var(--active)}
+/* ✅ 新增：禁用态样式，便于未验证时置灰云端按钮 */
+button:disabled{ opacity:.5; cursor:not-allowed; }
 .badge{font-variant-numeric:tabular-nums;border:1px solid var(--line);border-radius:999px;padding:4px 8px;color:var(--muted)}
 .panel{background:var(--cell);border:1px solid var(--line);border-radius:14px;padding:10px;margin:10px 0}
 table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}
@@ -100,10 +102,6 @@ td.col-act{ position:relative; overflow:visible; }
 .table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
 </style>
 </head>
-
-
-
-
 
 <body>
 <div class="wrap">
@@ -198,6 +196,29 @@ td.col-act{ position:relative; overflow:visible; }
   /* 配置 */
   const WORKER_URL = 'https://xhsphone.sevenoy.workers.dev';
   const ACCESS_KEY  = 'xhs_ZO6dI5#yXGgLkubH_rzMZC@wyY%h6J-kc7XN4E^O';
+
+  /* ✅ 新增：白名单检测/提示/按钮状态 */
+  const WHITE_LOCAL_KEY   = 'xhs_whitelist_v1';
+  const WHITE_SESSION_KEY = 'xhs_whitelist_sess_v1';
+  function whiteOK(){
+    try{
+      return sessionStorage.getItem(WHITE_SESSION_KEY)==='1'
+          || localStorage.getItem(WHITE_LOCAL_KEY)==='1';
+    }catch{ return false; }
+  }
+  function assertWhite(showMsg=true){
+    if(whiteOK()) return true;
+    if(showMsg) alert('需要通过白名单验证后，才能进行“保存云端 / 云端加载”。');
+    return false;
+  }
+  function updateCloudButtons(){
+    const ok = whiteOK();
+    ['btnSaveCloud','btnLoadCloud'].forEach(id=>{
+      const b=document.getElementById(id); if(!b) return;
+      b.disabled = !ok;
+      b.title = ok ? '' : '请先点击左上角“未验证”完成白名单验证';
+    });
+  }
 
   /* 工具 */
   const $  = (q, s=document)=>s.querySelector(q);
@@ -408,8 +429,26 @@ td.col-act{ position:relative; overflow:visible; }
   function setCloudStatus(ok, text){ const d=$('#cloudDot'), t=$('#cloudText'); if(d) d.style.background=ok?'#20c997':'#d9534f'; if(t) t.textContent=text||(ok?'云端已连接':'离线'); }
   async function timedFetch(url, opts, ms){ const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(), ms||12000); try{ const r=await fetch(url,{signal:ctl.signal,...(opts||{})}); clearTimeout(timer); return r; }catch(e){ clearTimeout(timer); throw e; } }
   async function secureFetch(url, opts){ const headers=Object.assign({}, (opts&&opts.headers)||{}, {'X-Access-Key': ACCESS_KEY}); try{ return await timedFetch(url, {...(opts||{}), headers}, 12000); }catch(e){ setCloudStatus(false,'网络异常'); throw e; } }
-  window.cloudLoad = async function(){ try{ const rsp=await secureFetch(WORKER_URL,{method:'GET',cache:'no-store'}); if(!rsp.ok){ const txt=await rsp.text().catch(()=>''); setCloudStatus(false,'读取失败'); alert('云端读取失败：'+rsp.status+(txt?(' '+txt):'')); return null; } const data=await rsp.json(); setCloudStatus(true,'云端已连接'); alert('已从云端读取'); return data; }catch(e){ alert('云端读取异常'); return null; } };
-  window.cloudSave = async function(payload){ try{ const rsp=await secureFetch(WORKER_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if(!rsp.ok){ const txt=await rsp.text().catch(()=> ''); setCloudStatus(false,'保存失败'); alert('云端保存失败：'+rsp.status+(txt?(' '+txt):'')); return false; } setCloudStatus(true,'已同步'); alert('云端保存成功'); return true; }catch(e){ alert('云端保存异常'); return false; } };
+
+  /* ✅ 强制白名单校验的云端函数 */
+  window.cloudLoad = async function(){
+    if(!whiteOK()){ alert('需要通过白名单验证后才能从云端加载。'); return null; }
+    try{
+      const rsp=await secureFetch(WORKER_URL,{method:'GET',cache:'no-store'});
+      if(!rsp.ok){ const txt=await rsp.text().catch(()=> ''); setCloudStatus(false,'读取失败');
+        alert('云端读取失败：'+rsp.status+(txt?(' '+txt):'')); return null; }
+      const data=await rsp.json(); setCloudStatus(true,'云端已连接'); alert('已从云端读取'); return data;
+    }catch(e){ alert('云端读取异常'); return null; }
+  };
+  window.cloudSave = async function(payload){
+    if(!whiteOK()){ alert('需要通过白名单验证后才能保存到云端。'); return false; }
+    try{
+      const rsp=await secureFetch(WORKER_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      if(!rsp.ok){ const txt=await rsp.text().catch(()=> ''); setCloudStatus(false,'保存失败');
+        alert('云端保存失败：'+rsp.status+(txt?(' '+txt):'')); return false; }
+      setCloudStatus(true,'已同步'); alert('云端保存成功'); return true;
+    }catch(e){ alert('云端保存异常'); return false; }
+  };
 
   /* 验证徽章 */
   (function(){
@@ -422,8 +461,8 @@ td.col-act{ position:relative; overflow:visible; }
     function isWhite(){ return sessionStorage.getItem(WH_SESSION_KEY)==='1' || localStorage.getItem(WH_LOCAL_KEY)==='1'; }
     function setWhite(){ try{ sessionStorage.setItem(WH_SESSION_KEY,'1'); }catch(e){} try{ localStorage.setItem(WH_LOCAL_KEY,'1'); }catch(e){} }
     function refresh(el){ if(!el) return; el.textContent=isWhite()?'已验证白名单':'未验证'; el.style.cursor='pointer'; el.title='点击输入密码加入白名单'; }
-    function setup(){ const el=findBadge(); if(!el||el.__ok) return; el.__ok=true; refresh(el); el.addEventListener('click', async()=>{ const p=prompt('请输入访问密码：'); if(!p) return; const ok=(await sha256hex(p.trim()))===PWD_SHA256; if(ok){ setWhite(); alert('验证成功，本设备加入白名单'); }else{ alert('密码错误'); } refresh(el); }); }
-    document.addEventListener('DOMContentLoaded', ()=>{ setup(); setTimeout(setup, 700); });
+    function setup(){ const el=findBadge(); if(!el||el.__ok) return; el.__ok=true; refresh(el); el.addEventListener('click', async()=>{ const p=prompt('请输入访问密码：'); if(!p) return; const ok=(await sha256hex(p.trim()))===PWD_SHA256; if(ok){ setWhite(); alert('验证成功，本设备加入白名单'); }else{ alert('密码错误'); } refresh(el); /* ✅ 验证后同步按钮状态 */ updateCloudButtons(); }); }
+    document.addEventListener('DOMContentLoaded', ()=>{ setup(); setTimeout(()=>{ setup(); updateCloudButtons(); }, 700); });
   })();
 
   /* 分类 UI */
@@ -473,11 +512,6 @@ td.col-act{ position:relative; overflow:visible; }
         if(act==='editName'){
           const nn=prompt('分类名称', cats[i].name);
           if(nn!==null){ cats[i].name=(nn||'').trim()||cats[i].name; saveCats(cats); renderCatList(); ensureCatOptions(); }
-          return;
-        }
-        if(act==='editColor'){
-          const cc=prompt('颜色（十六进制，如 #ff6699）', cats[i].color);
-          if(cc){ cats[i].color=cc; saveCats(cats); renderCatList(); ensureCatOptions(); }
           return;
         }
         if(act==='del'){
@@ -548,13 +582,68 @@ td.col-act{ position:relative; overflow:visible; }
     /* 分类区 */
     renderCatList(); bindCategoryEvents();
 
-    /* 云端按钮 */
+    /* 云端按钮（✅ 加入白名单检查与确认） */
     const s=$('#btnSaveCloud'), l=$('#btnLoadCloud'), exp=$('#btnExportCSV');
-    if(s && !s.__w){ s.__w=true; s.addEventListener('click', async()=>{ try{ const rows=await dbLocal.rows.toArray(); const cats=JSON.parse(localStorage.getItem('cats_v6')||'[]'); const view=JSON.parse(localStorage.getItem('view_v6')||'{}'); const payload={rows,cats,view,ver:1,updated_at:new Date().toISOString()}; await cloudSave(payload); }catch{ alert('准备保存数据失败'); } }); }
-    if(l && !l.__w){ l.__w=true; l.addEventListener('click', async()=>{ const data=await cloudLoad(); if(data){ try{ await dbLocal.rows.clear(); if(Array.isArray(data.rows)&&data.rows.length) await dbLocal.rows.bulkPut(data.rows); if(Array.isArray(data.cats)) localStorage.setItem('cats_v6', JSON.stringify(data.cats)); if(data.view&&typeof data.view==='object') localStorage.setItem('view_v6', JSON.stringify(data.view)); await render(); alert('已应用云端数据'); }catch{ alert('写入本地失败'); } } }); }
-    if(exp && !exp.__w){ exp.__w=true; exp.addEventListener('click', async()=>{ try{ const rows = await dbLocal.rows.toArray(); const cols=['phone','owner','wx_real','wx_name','xhs_name','note1','row_color']; const esc=v=>{const s=(v==null?'':String(v)).replace(/"/g,'""'); return /[",\n]/.test(s)?'"'+s+'"':s;}; const lines=[cols.join(',')]; rows.forEach(r=>lines.push(cols.map(k=>esc(r[k]||'')).join(','))); const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='xhs-phones-'+Date.now()+'.csv'; a.click(); alert('已导出 CSV'); }catch{ alert('导出失败'); } }); }
+
+    if(s && !s.__w){
+      s.__w=true;
+      s.addEventListener('click', async()=>{
+        if(!assertWhite(true)) return;
+        if(!confirm('确定将当前“本地数据”保存到云端？\n此操作会覆盖云端数据。')) return;
+        try{
+          const rows=await dbLocal.rows.toArray();
+          const cats=JSON.parse(localStorage.getItem('cats_v6')||'[]');
+          const view=JSON.parse(localStorage.getItem('view_v6')||'{}');
+          const payload={rows,cats,view,ver:1,updated_at:new Date().toISOString()};
+          await cloudSave(payload);
+        }catch{ alert('准备保存数据失败'); }
+      });
+    }
+
+    if(l && !l.__w){
+      l.__w=true;
+      l.addEventListener('click', async()=>{
+        if(!assertWhite(true)) return;
+        if(!confirm('确定从云端加载并覆盖本地数据？\n此操作不可撤销。')) return;
+        const data=await cloudLoad();
+        if(data){
+          try{
+            await dbLocal.rows.clear();
+            if(Array.isArray(data.rows)&&data.rows.length) await dbLocal.rows.bulkPut(data.rows);
+            if(Array.isArray(data.cats)) localStorage.setItem('cats_v6', JSON.stringify(data.cats));
+            if(data.view&&typeof data.view==='object') localStorage.setItem('view_v6', JSON.stringify(data.view));
+            await render(); alert('已应用云端数据');
+          }catch{ alert('写入本地失败'); }
+        }
+      });
+    }
+
+    if(exp && !exp.__w){
+      exp.__w=true;
+      exp.addEventListener('click', async()=>{
+        try{
+          const rows = await dbLocal.rows.toArray();
+          const cols=['phone','owner','wx_real','wx_name','xhs_name','note1','row_color'];
+          const esc=v=>{const s=(v==null?'':String(v)).replace(/"/g,'""'); return /[",\n]/.test(s)?'"'+s+'"':s;};
+          const lines=[cols.join(',')];
+          rows.forEach(r=>lines.push(cols.map(k=>esc(r[k]||'')).join(',')));
+          const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8'});
+          const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='xhs-phones-'+Date.now()+'.csv'; a.click();
+          alert('已导出 CSV');
+        }catch{ alert('导出失败'); }
+      });
+    }
+
+    /* 首次进入根据验证状态置灰/启用云端按钮 */
+    updateCloudButtons();
+
     /* 连通性 */
-    (async ()=>{ try{ const r=await fetch(WORKER_URL,{method:'GET',headers:{'X-Access-Key':ACCESS_KEY},cache:'no-store'}); setCloudStatus(r.ok, r.ok?'云端已连接':'连接失败'); }catch{ setCloudStatus(false,'离线'); } })();
+    (async ()=>{
+      try{
+        const r=await fetch(WORKER_URL,{method:'GET',headers:{'X-Access-Key':ACCESS_KEY},cache:'no-store'});
+        setCloudStatus(r.ok, r.ok?'云端已连接':'连接失败');
+      }catch{ setCloudStatus(false,'离线'); }
+    })();
   });
 })();
 </script>
