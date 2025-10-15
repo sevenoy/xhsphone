@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>小红书手机号整理 · 协作表格（苹果风 v6 · KV云端）</title>
+
+<!-- Favicon / Icons（自动从根目录调取，如果同级存在也能命中） -->
+<link rel="icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" href="./favicon.ico">
+
+<style>
+  :root{
+    --bg:#f7f8fa;--card:#fff;--text:#222;--muted:#7a7a7a;--brand:#4f7cff;--ok:#2ec07c;--bad:#d9534f;--line:#eaeaea;
+    --radius:16px;
+    --font:14px;
+    --cell-py:10px;
+    --col-scale:1;
+    --cat-pill:#eef3ff;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--text);font:var(--font)/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+  .container{max-width:1080px;margin:0 auto;padding:16px 14px 100px}
+  header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+  h1{font-size:20px;margin:0 6px 0 0;font-weight:700}
+  .badge{display:inline-flex;align-items:center;gap:.5em;background:#fff;border:1px solid var(--line);color:#666;border-radius:999px;padding:6px 12px}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;background:var(--bad)}
+  .ok{background:var(--ok)}
+  .toolbar{position:sticky;top:0;z-index:10;background:#fff;padding:10px;border-bottom:1px solid var(--line)}
+  .bar{display:flex;gap:10px;flex-wrap:wrap}
+  button{padding:10px 14px;border:0;border-radius:12px;background:#eef3ff;color:#2643a2;font-weight:600}
+  button.primary{background:var(--brand);color:#fff}
+  button.ghost{background:#f1f3f5;color:#333}
+  button.warn{background:#ffe8e6;color:#933}
+  input,select{height:38px;border:1px solid var(--line);border-radius:12px;padding:0 12px;background:#fff}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px}
+  .table-wrap{overflow:auto;border-radius:12px;border:1px solid var(--line);background:#fff}
+  table{min-width:900px;border-collapse:collapse;width:100%; transform-origin:left top;}
+  th,td{border-bottom:1px solid var(--line);padding:var(--cell-py) calc(8px * var(--col-scale));text-align:left;white-space:nowrap}
+  th{position:sticky;top:60px;background:#fff;z-index:1}
+  tr:nth-child(even){background:#fcfdff}
+  tr:hover{background:#f7fbff}
+  .muted{color:var(--muted)}
+  .footer-note{margin-top:8px;color:#999}
+  .pill{display:inline-flex;align-items:center;gap:6px;background:var(--cat-pill);border-radius:999px;padding:4px 10px}
+  .pill .dot{width:8px;height:8px;margin:0;border:1px solid #0001}
+  .hidden{display:none}
+
+  /* Modal 通用 */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.38);display:none;align-items:center;justify-content:center;padding:20px}
+  .modal .panel{width:100%;max-width:520px;background:#fff;border-radius:18px;padding:18px;border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.15)}
+  .modal h3{margin:0 0 8px}
+  .modal .row{display:flex;gap:8px;align-items:center;margin:8px 0}
+  .modal input[type="text"]{flex:1}
+  .modal .list{max-height:240px;overflow:auto;border:1px dashed var(--line);padding:8px;border-radius:12px}
+
+  /* 让移动端更好操作 */
+  @media (max-width:640px){
+    button{padding:10px 12px}
+    .toolbar{border-radius:0}
+    th,td{padding:var(--cell-py) calc(6px * var(--col-scale))}
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>小红书手机号整理 · 协作表格（苹果风 v6）</h1>
+    <span id="white-badge" class="badge">未验证</span>
+    <span class="badge"><span id="cloud-dot" class="dot"></span><span id="cloud-text">离线</span></span>
+  </header>
+
+  <div class="toolbar">
+    <div class="bar">
+      <button id="btn-add" class="primary">＋ 新增一行</button>
+
+      <label class="badge" style="cursor:pointer">
+        <input type="file" id="csv-file" accept=".csv" class="hidden"/>
+        导入 CSV
+      </label>
+
+      <button id="btn-save-cloud" class="ghost">保存到云端</button>
+      <button id="btn-load-cloud" class="ghost">从云端加载</button>
+      <button id="btn-export" class="ghost">导出 CSV</button>
+      <button id="btn-clear" class="warn">清空全部</button>
+
+      <button id="btn-view" class="ghost">显示与尺寸</button>
+      <button id="btn-cats" class="ghost">分类设置</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th style="min-width:120px">微信实名人</th>
+            <th style="min-width:120px">对应微信名</th>
+            <th style="min-width:200px">小红书名称</th>
+            <th style="min-width:220px">备注</th>
+            <th style="min-width:120px">分类</th>
+            <th class="muted" style="min-width:80px">操作</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="footer-note">本地模式：数据会写入浏览器（localStorage），并可手动同步至云端（Cloudflare KV）。</div>
+  </div>
+</div>
+
+<!-- 密码门 -->
+<div id="gate" class="modal">
+  <div class="panel">
+    <h3>访问验证</h3>
+    <p class="muted">请输入访问密码，通过后设备将加入本地白名单。</p>
+    <div class="row" style="margin-top:8px">
+      <input id="gate-input" type="password" placeholder="输入密码" />
+      <button id="gate-ok" class="primary">进入</button>
+    </div>
+  </div>
+</div>
+
+<!-- 显示与尺寸 -->
+<div id="viewModal" class="modal">
+  <div class="panel">
+    <h3>显示与尺寸</h3>
+    <div class="row">
+      <label style="width:110px">字体大小</label>
+      <input id="fontRange" type="range" min="12" max="18" step="1" value="14">
+      <span id="fontVal">14px</span>
+    </div>
+    <div class="row">
+      <label style="width:110px">行高</label>
+      <select id="rowDensity">
+        <option value="compact">紧凑</option>
+        <option value="normal">正常</option>
+        <option value="loose">宽松</option>
+      </select>
+    </div>
+    <div class="row">
+      <label style="width:110px">列宽缩放</label>
+      <input id="colScale" type="range" min="0.8" max="1.4" step="0.05" value="1">
+      <span id="scaleVal">1.00×</span>
+    </div>
+    <div class="row" style="justify-content:flex-end">
+      <button id="viewClose" class="primary">完成</button>
+    </div>
+  </div>
+</div>
+
+<!-- 分类设置 -->
+<div id="catsModal" class="modal">
+  <div class="panel">
+    <h3>分类设置</h3>
+    <div class="row">
+      <input id="catName" type="text" placeholder="分类名，如：企业号/嘉用/个人" />
+      <input id="catColor" type="color" value="#a8c5ff" style="width:56px;padding:0">
+      <button id="addCat" class="primary">添加</button>
+    </div>
+    <div id="catsList" class="list"></div>
+    <div class="row" style="justify-content:space-between">
+      <span class="muted">提示：设置后，表格“分类”列会出现下拉选择，可也手动输入。</span>
+      <div>
+        <button id="catsReset" class="ghost">恢复默认</button>
+        <button id="catsClose" class="primary">完成</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/** ========= 填你的环境 ========= */
+const WORKER_URL = 'https://xhsphone.sevenoy.workers.dev';
+const ACCESS_KEY  = 'xhs_ZO6dI5#yXGgLkubH_rzMZC@wyY%h6J-kc7XN4E^O';
+const PASS = 'jiajia11jiajia22jiajia33';
+
+/** ========= 本地键 ========= */
+const LS_WHITELIST = 'xhs_whitelist';
+const LS_ROWS = 'xhs_rows_v1';
+const LS_CATS = 'xhs_cats_v1';
+const LS_VIEW = 'xhs_view_v1';
+
+/** ========= 验证门 ========= */
+function ensureGate(){
+  const ok = localStorage.getItem(LS_WHITELIST) === '1';
+  const badge = document.getElementById('white-badge');
+  if(ok){
+    badge.textContent = '已验证白名单';
+    badge.style.color = '#333';
+  }else{
+    badge.textContent = '未验证';
+    badge.style.color = '#c00';
+    document.getElementById('gate').style.display = 'flex';
+  }
+}
+document.getElementById('gate-ok').onclick = ()=>{
+  const v = document.getElementById('gate-input').value.trim();
+  if(v === PASS){
+    localStorage.setItem(LS_WHITELIST,'1');
+    document.getElementById('gate').style.display='none';
+    document.getElementById('white-badge').textContent = '已验证白名单';
+  }else{
+    alert('密码错误');
+  }
+};
+
+/** ========= 状态缓存 ========= */
+function getRows(){ try{ return JSON.parse(localStorage.getItem(LS_ROWS)||'[]')}catch{return []} }
+function setRows(rows){ localStorage.setItem(LS_ROWS, JSON.stringify(rows||[])); render(); }
+function getCats(){ try{ return JSON.parse(localStorage.getItem(LS_CATS)||'[]')}catch{return []} }
+function setCats(cats){ localStorage.setItem(LS_CATS, JSON.stringify(cats||[])); render(); }
+function getView(){ try{ return JSON.parse(localStorage.getItem(LS_VIEW)||'{}')}catch{return {}} }
+function setView(v){ localStorage.setItem(LS_VIEW, JSON.stringify(v||{})); applyView(); }
+
+/** ========= 视图控制 ========= */
+function applyView(){
+  const v = getView();
+  const font = v.fontSize || 14;
+  const density = v.density || 'compact';
+  const scale = v.colScale || 1;
+  document.documentElement.style.setProperty('--font', font+'px');
+  document.getElementById('fontRange').value = font;
+  document.getElementById('fontVal').textContent = font+'px';
+  // 行高 → 修改单元格内 padding
+  let py = 8; if(density==='normal') py=10; if(density==='loose') py=14;
+  document.documentElement.style.setProperty('--cell-py', py+'px');
+  document.getElementById('rowDensity').value = density;
+  // 列宽缩放
+  document.documentElement.style.setProperty('--col-scale', scale);
+  document.getElementById('colScale').value = scale;
+  document.getElementById('scaleVal').textContent = scale.toFixed(2)+'×';
+}
+document.getElementById('btn-view').onclick = ()=>{ document.getElementById('viewModal').style.display='flex'; };
+document.getElementById('viewClose').onclick = ()=>{ document.getElementById('viewModal').style.display='none'; };
+document.getElementById('fontRange').oninput = (e)=>{ const v=getView(); v.fontSize=+e.target.value; setView(v); };
+document.getElementById('rowDensity').onchange = (e)=>{ const v=getView(); v.density=e.target.value; setView(v); };
+document.getElementById('colScale').oninput = (e)=>{ const v=getView(); v.colScale=+e.target.value; setView(v); };
+
+/** ========= 分类设置 ========= */
+const defaultCats=[
+  {name:'企业号', color:'#a0c4ff'},
+  {name:'嘉用', color:'#b9fbc0'},
+  {name:'个人', color:'#ffd6a5'}
+];
+function renderCatsPanel(){
+  const box = document.getElementById('catsList'); box.innerHTML='';
+  const cats = getCats();
+  if(!cats.length){ box.innerHTML='<div class="muted">暂无分类，请在上方添加</div>'; return; }
+  cats.forEach((c,i)=>{
+    const row=document.createElement('div'); row.className='row';
+    row.innerHTML=`
+      <span class="pill" style="background:${c.color}22"><span class="dot" style="background:${c.color}"></span>${c.name}</span>
+      <span class="muted" style="flex:1"></span>
+      <button data-i="${i}" data-act="up">上移</button>
+      <button data-i="${i}" data-act="down">下移</button>
+      <button class="warn" data-i="${i}" data-act="del">删除</button>
+    `;
+    box.appendChild(row);
+  });
+}
+document.getElementById('btn-cats').onclick = ()=>{ renderCatsPanel(); document.getElementById('catsModal').style.display='flex'; };
+document.getElementById('catsClose').onclick = ()=>{ document.getElementById('catsModal').style.display='none'; render(); };
+document.getElementById('catsReset').onclick = ()=>{ setCats(defaultCats); renderCatsPanel(); };
+document.getElementById('addCat').onclick = ()=>{
+  const name = document.getElementById('catName').value.trim();
+  const color = document.getElementById('catColor').value;
+  if(!name) return;
+  const cats = getCats(); cats.push({name, color}); setCats(cats);
+  document.getElementById('catName').value='';
+  renderCatsPanel();
+};
+document.getElementById('catsList').addEventListener('click',(e)=>{
+  const i = +e.target.dataset.i; if(Number.isNaN(i)) return;
+  const cats = getCats();
+  const act = e.target.dataset.act;
+  if(act==='del'){ cats.splice(i,1); }
+  if(act==='up' && i>0){ [cats[i-1],cats[i]]=[cats[i],cats[i-1]]; }
+  if(act==='down' && i<cats.length-1){ [cats[i+1],cats[i]]=[cats[i],cats[i+1]]; }
+  setCats(cats); renderCatsPanel();
+});
+
+/** ========= 渲染表格 ========= */
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]))}
+function render(){
+  const rows = getRows();
+  const tb = document.getElementById('tbody'); tb.innerHTML='';
+  const cats = getCats();
+  rows.forEach((r,idx)=>{
+    const tr = document.createElement('tr');
+    // 分类下拉
+    let opts = cats.map(c=>`<option value="${escapeHtml(c.name)}" data-color="${c.color}" ${c.name===(r.cat||'')?'selected':''}>${escapeHtml(c.name)}</option>`).join('');
+    const catCell = `
+      <select data-k="cat" data-i="${idx}" class="cat-select">
+        <option value="">（无）</option>${opts}
+      </select>
+    `;
+    tr.innerHTML = `
+      <td contenteditable="true" data-k="wx_real">${escapeHtml(r.wx_real||'')}</td>
+      <td contenteditable="true" data-k="wx_name">${escapeHtml(r.wx_name||'')}</td>
+      <td contenteditable="true" data-k="xhs_name">${escapeHtml(r.xhs_name||'')}</td>
+      <td contenteditable="true" data-k="note">${escapeHtml(r.note||'')}</td>
+      <td>${catCell}</td>
+      <td><button data-act="del" data-i="${idx}">删除</button></td>`;
+    tb.appendChild(tr);
+  });
+}
+document.getElementById('tbody').addEventListener('input', (e)=>{
+  const td = e.target.closest('td[contenteditable]'); if(!td) return;
+  const k = td.dataset.k;
+  const tr = td.parentElement;
+  const idx = Array.from(tr.parentElement.children).indexOf(tr);
+  const rows = getRows();
+  rows[idx] = rows[idx] || {};
+  rows[idx][k] = td.textContent.trim();
+  setRows(rows);
+});
+document.getElementById('tbody').addEventListener('change',(e)=>{
+  if(e.target.classList.contains('cat-select')){
+    const i = +e.target.dataset.i;
+    const rows = getRows();
+    rows[i] = rows[i] || {};
+    rows[i].cat = e.target.value;
+    setRows(rows);
+  }
+});
+document.getElementById('tbody').addEventListener('click', (e)=>{
+  if(e.target.dataset.act==='del'){
+    const i = +e.target.dataset.i;
+    const rows = getRows();
+    rows.splice(i,1);
+    setRows(rows);
+  }
+});
+
+document.getElementById('btn-add').onclick = ()=>{
+  const rows = getRows();
+  rows.unshift({wx_real:'',wx_name:'',xhs_name:'',note:'',cat:''});
+  setRows(rows);
+};
+
+/** ========= CSV 导入/导出 ========= */
+function toCSV(rows){
+  const head = ['微信实名人','对应微信名','小红书名称','备注','分类'];
+  const lines = [head.join(',')];
+  rows.forEach(r=>{
+    const arr = [r.wx_real||'',r.wx_name||'',r.xhs_name||'',r.note||'',r.cat||''].map(v=>`"${String(v).replace(/"/g,'""')}"`);
+    lines.push(arr.join(','));
+  });
+  return lines.join('\r\n');
+}
+function fromCSV(text){
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  if(!lines.length) return [];
+  const out = [];
+  for(let i=1;i<lines.length;i++){
+    const row = parseCSVLine(lines[i]);
+    out.push({wx_real:row[0]||'',wx_name:row[1]||'',xhs_name:row[2]||'',note:row[3]||'',cat:row[4]||''});
+  }
+  return out;
+}
+function parseCSVLine(line){
+  const res=[]; let cur='',inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c=='"'){ if(inQ && line[i+1]=='"'){cur+='"'; i++;} else inQ=!inQ; }
+    else if(c==',' && !inQ){ res.push(cur); cur=''; }
+    else cur+=c;
+  }
+  res.push(cur); return res;
+}
+document.getElementById('csv-file').addEventListener('change', async (e)=>{
+  const file = e.target.files[0]; if(!file) return;
+  const text = await file.text();
+  const rows = fromCSV(text);
+  setRows(rows);
+  alert('CSV 已导入');
+});
+document.getElementById('btn-export').onclick = ()=>{
+  const csv = toCSV(getRows());
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'rows.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+/** ========= 云端保存/读取 + 状态灯 ========= */
+function setCloudStatus(ok){
+  const dot=document.getElementById('cloud-dot'); const txt=document.getElementById('cloud-text');
+  dot.className = 'dot' + (ok ? ' ok' : '');
+  txt.textContent = ok ? '云端已连接' : '离线';
+}
+async function saveToCloud(){
+  try{
+    const payload = {rows:getRows(), cats:getCats(), view:getView(), ver:2, updated_at:new Date().toISOString()};
+    const res = await fetch(WORKER_URL, {
+      method:'PUT',
+      headers:{'Content-Type':'application/json','X-Access-Key':ACCESS_KEY},
+      body:JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error(res.status);
+    alert('已保存到云端'); setCloudStatus(true);
+  }catch(e){ console.error(e); alert('云端保存失败（网络或权限）'); setCloudStatus(false); }
+}
+async function loadFromCloud(){
+  try{
+    const res = await fetch(WORKER_URL, { headers:{'X-Access-Key':ACCESS_KEY} });
+    if(!res.ok) throw new Error(res.status);
+    const json = await res.json();
+    if(Array.isArray(json.rows)) setRows(json.rows);
+    if(Array.isArray(json.cats)) setCats(json.cats);
+    if(json.view) setView(json.view);
+    alert('已从云端读取'); setCloudStatus(true);
+  }catch(e){ console.error(e); alert('云端读取失败（网络或权限）'); setCloudStatus(false); }
+}
+document.getElementById('btn-save-cloud').onclick = saveToCloud;
+document.getElementById('btn-load-cloud').onclick = loadFromCloud;
+document.getElementById('btn-clear').onclick = ()=>{ if(confirm('确定清空本地表格？')) setRows([]); };
+
+/** ========= 初始化 ========= */
+function probeCloud(){
+  fetch(WORKER_URL, {headers:{'X-Access-Key':ACCESS_KEY}})
+    .then(r=>setCloudStatus(r.ok)).catch(()=>setCloudStatus(false));
+}
+(function init(){
+  ensureGate();
+  if(!localStorage.getItem(LS_ROWS)) setRows([]); else render();
+  if(!localStorage.getItem(LS_CATS)) setCats(defaultCats);
+  if(!localStorage.getItem(LS_VIEW)) setView({fontSize:14,density:'compact',colScale:1}); else applyView();
+  probeCloud();
+})();
+</script>
+</body>
+</html>
