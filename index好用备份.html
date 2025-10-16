@@ -34,7 +34,7 @@
   --cell:#fff;--cell-alt:#f5f5f7;
   --pad:6px;--colScale:1;--zebra:#eef5ff;
   --w-phone:160px;--w-owner:120px;--w-real:120px;--w-wx:160px;--w-xhs:340px;--w-note:220px;--w-cat:140px;
-  --w-actions:220px;      /* 扩宽避免遮挡分类下拉 */
+  --w-actions:220px;
   --active:#3478F7;
 }
 *{box-sizing:border-box}
@@ -48,16 +48,15 @@ button{background:var(--blue);border:none;color:#fff;padding:0 12px;cursor:point
 button.ghost{background:#f2f2f7;color:#000;border:1px solid var(--line)}
 button:active{background:var(--blue-press)}
 button.ghost.active{background:var(--active);color:#fff;border-color:var(--active)}
-/* ✅ 新增：禁用态样式，便于未验证时置灰云端按钮 */
-button:disabled{ opacity:.5; cursor:not-allowed; }
+button:disabled{opacity:.5;cursor:not-allowed}
 .badge{font-variant-numeric:tabular-nums;border:1px solid var(--line);border-radius:999px;padding:4px 8px;color:var(--muted)}
 .panel{background:var(--cell);border:1px solid var(--line);border-radius:14px;padding:10px;margin:10px 0}
 table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}
 th,td{padding:var(--pad) 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 thead th{position:sticky;top:0;background:#f9f9fb;font-weight:600;z-index:2}
-tbody.zebra tr:nth-child(even) td{ background: var(--zebra); }
-td[contenteditable='true']{background:transparent; outline:none}
-td[contenteditable='true']:focus{background:var(--cell-alt); outline:1px solid var(--line)}
+tbody.zebra tr:nth-child(even) td{background:var(--zebra)}
+td[contenteditable='true']{background:transparent;outline:none}
+td[contenteditable='true']:focus{background:var(--cell-alt);outline:1px solid var(--line)}
 .status{font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-wrap}
 .rgbaChip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;height:32px}
 .colorDot{width:14px;height:14px;border-radius:4px;border:1px solid #c9c9ce;display:inline-block}
@@ -135,7 +134,9 @@ td.col-act{ position:relative; overflow:visible; }
       <button id="btnClearAll" class="ghost">清空全部</button>
       <button id="btnCategories" class="ghost">分类设置</button>
       <button id="btnView" class="ghost">显示尺寸</button>
-      <button id="btnDebug" class="ghost">显示日志</button>
+      <!-- 改名为“日志”，并新增“刷新”按钮 -->
+      <button id="btnDebug" class="ghost">日志</button>
+      <button id="btnReload" class="ghost">刷新</button>
     </div>
     <div class="status" id="statusText">本地模式：不联网 · 支持 CSV 导入 / JSON 导出</div>
   </div>
@@ -197,7 +198,7 @@ td.col-act{ position:relative; overflow:visible; }
   const WORKER_URL = 'https://xhsphone.sevenoy.workers.dev';
   const ACCESS_KEY  = 'xhs_ZO6dI5#yXGgLkubH_rzMZC@wyY%h6J-kc7XN4E^O';
 
-  /* ✅ 新增：白名单检测/提示/按钮状态 */
+  /* ✅ 白名单控制 */
   const WHITE_LOCAL_KEY   = 'xhs_whitelist_v1';
   const WHITE_SESSION_KEY = 'xhs_whitelist_sess_v1';
   function whiteOK(){
@@ -335,7 +336,7 @@ td.col-act{ position:relative; overflow:visible; }
     const r={ id:crypto.randomUUID(), order, phone:'', owner:'', wx_real:'', wx_name:'', xhs_name:'', note1:'', row_color:'', created_at:new Date().toISOString(), updated_at:new Date().toISOString() };
     await dbLocal.rows.put(r); await reindexOrders(); await render();
   }
-  async function addRowLocal(){ const total=await dbLocal.rows.count(); await addRowLocalAt(total); } // 兼容
+  async function addRowLocal(){ const total=await dbLocal.rows.count(); await addRowLocalAt(total); }
   async function updateCellLocal(id,key,value){ const r=await dbLocal.rows.get(id); if(!r) return; const patch={}; patch[key]=value; patch.updated_at=new Date().toISOString(); await dbLocal.rows.update(id, patch); await render(); }
   async function deleteRowLocal(id){ await dbLocal.rows.delete(id); await render(); }
   async function moveRow(id, dir){
@@ -425,12 +426,11 @@ td.col-act{ position:relative; overflow:visible; }
     });
   }
 
-  /* 云端 */
+  /* 云端（带白名单校验） */
   function setCloudStatus(ok, text){ const d=$('#cloudDot'), t=$('#cloudText'); if(d) d.style.background=ok?'#20c997':'#d9534f'; if(t) t.textContent=text||(ok?'云端已连接':'离线'); }
   async function timedFetch(url, opts, ms){ const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(), ms||12000); try{ const r=await fetch(url,{signal:ctl.signal,...(opts||{})}); clearTimeout(timer); return r; }catch(e){ clearTimeout(timer); throw e; } }
   async function secureFetch(url, opts){ const headers=Object.assign({}, (opts&&opts.headers)||{}, {'X-Access-Key': ACCESS_KEY}); try{ return await timedFetch(url, {...(opts||{}), headers}, 12000); }catch(e){ setCloudStatus(false,'网络异常'); throw e; } }
 
-  /* ✅ 强制白名单校验的云端函数 */
   window.cloudLoad = async function(){
     if(!whiteOK()){ alert('需要通过白名单验证后才能从云端加载。'); return null; }
     try{
@@ -461,7 +461,7 @@ td.col-act{ position:relative; overflow:visible; }
     function isWhite(){ return sessionStorage.getItem(WH_SESSION_KEY)==='1' || localStorage.getItem(WH_LOCAL_KEY)==='1'; }
     function setWhite(){ try{ sessionStorage.setItem(WH_SESSION_KEY,'1'); }catch(e){} try{ localStorage.setItem(WH_LOCAL_KEY,'1'); }catch(e){} }
     function refresh(el){ if(!el) return; el.textContent=isWhite()?'已验证白名单':'未验证'; el.style.cursor='pointer'; el.title='点击输入密码加入白名单'; }
-    function setup(){ const el=findBadge(); if(!el||el.__ok) return; el.__ok=true; refresh(el); el.addEventListener('click', async()=>{ const p=prompt('请输入访问密码：'); if(!p) return; const ok=(await sha256hex(p.trim()))===PWD_SHA256; if(ok){ setWhite(); alert('验证成功，本设备加入白名单'); }else{ alert('密码错误'); } refresh(el); /* ✅ 验证后同步按钮状态 */ updateCloudButtons(); }); }
+    function setup(){ const el=findBadge(); if(!el||el.__ok) return; el.__ok=true; refresh(el); el.addEventListener('click', async()=>{ const p=prompt('请输入访问密码：'); if(!p) return; const ok=(await sha256hex(p.trim()))===PWD_SHA256; if(ok){ setWhite(); alert('验证成功，本设备加入白名单'); }else{ alert('密码错误'); } refresh(el); updateCloudButtons(); }); }
     document.addEventListener('DOMContentLoaded', ()=>{ setup(); setTimeout(()=>{ setup(); updateCloudButtons(); }, 700); });
   })();
 
@@ -568,9 +568,9 @@ td.col-act{ position:relative; overflow:visible; }
       const tr=btn.closest('tr'); const id=tr.dataset.id; const act=btn.dataset.act;
       if(act==='toggleEdit'){
         const was=tr.classList.contains('row-editing');
-        $$('#gridBody tr.row-editing').forEach(el=>{ if(el!==tr) el.classList.remove('row-editing'); }); // 互斥①
-        tr.classList.toggle('row-editing', !was); // 互斥②
-        return; // 互斥③
+        $$('#gridBody tr.row-editing').forEach(el=>{ if(el!==tr) el.classList.remove('row-editing'); });
+        tr.classList.toggle('row-editing', !was);
+        return;
       }
       if(act==='del'){ if(confirm('确认删除该行？')) await deleteRowLocal(id); return; }
       if(act==='up'){ await moveRow(id,'up'); return; }
@@ -582,7 +582,7 @@ td.col-act{ position:relative; overflow:visible; }
     /* 分类区 */
     renderCatList(); bindCategoryEvents();
 
-    /* 云端按钮（✅ 加入白名单检查与确认） */
+    /* 云端按钮（白名单检查与确认） */
     const s=$('#btnSaveCloud'), l=$('#btnLoadCloud'), exp=$('#btnExportCSV');
 
     if(s && !s.__w){
@@ -633,6 +633,13 @@ td.col-act{ position:relative; overflow:visible; }
         }catch{ alert('导出失败'); }
       });
     }
+
+    /* 刷新按钮：强制加时间戳绕过缓存 */
+    $('#btnReload').onclick = () => {
+      const u = new URL(location.href);
+      u.searchParams.set('t', Date.now());
+      location.replace(u.toString());
+    };
 
     /* 首次进入根据验证状态置灰/启用云端按钮 */
     updateCloudButtons();
